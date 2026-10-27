@@ -40,7 +40,7 @@ only the env vars differ per environment.
    | Migration | Creates |
    | --- | --- |
    | [`0001_init.sql`](supabase/migrations/0001_init.sql) | `departments`, `profiles`, `audit_logs`, RLS hierarchy policies, “new user → profile” trigger |
-   | [`0002_restaurant_submissions.sql`](supabase/migrations/0002_restaurant_submissions.sql) | `restaurant_submissions` (Digital Race intake), triage enum, staff-only RLS |
+   | [`0002_restaurant_submissions.sql`](supabase/migrations/0002_restaurant_submissions.sql) | `restaurant_submissions` — Digital Race public form (columns match the form 1:1), duplicate guard, staff-only reads |
 
    Both are idempotent — safe to re-run.
 
@@ -49,10 +49,11 @@ only the env vars differ per environment.
    `psql "$DATABASE_URL" -f supabase/migrations/0001_init.sql -f supabase/migrations/0002_restaurant_submissions.sql`.)*
 
    > **`restaurant_submissions` access model:** `anon` may **INSERT only**
-   > (so the public form works without a session) and the row must arrive
-   > `status = 'new'`, unassigned and unreviewed. All `SELECT`/`UPDATE` is
-   > staff-only via RLS; `DELETE` is super-admin-only. Submitters can never
-   > read back or enumerate other rows.
+   > (so the public form works without a session). `SELECT` is signed-in staff;
+   > `UPDATE`/`DELETE` are super-admin only. Submitters can never read back or
+   > enumerate other rows. Validation lives in
+   > `restaurantSubmissionSchema` (`src/lib/validation.ts`) and mirrors the
+   > table's CHECK constraints.
 3. **Authentication settings** — **Authentication → URL Configuration**:
    - Site URL: `http://localhost:3000` (change to your Vercel domain later)
    - Redirect URLs: add `http://localhost:3000/**` and your production
