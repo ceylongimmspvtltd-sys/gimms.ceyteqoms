@@ -252,6 +252,19 @@ If the Vercel project is already linked to the GitHub repo, step 3's push to
    domain, Redirect URLs `https://<domain>/**`.
 4. Sign in at `/login` and confirm the 6-digit OTP arrives.
 
+## Dependency security
+
+`npm audit` is clean. Two pins are deliberate and must be kept:
+
+- **`overrides.postcss` → `^8.5.32`.** `next@15` pins `postcss@8.4.31`, which is
+  affected by CVE advisories GHSA-qx2v-qp2m-jg93 / -6g55-p6wh-862q /
+  -r28c-9q8g-f849 (arbitrary file read via `sourceMappingURL`). Build-time
+  only, but overridden anyway; `next build` is verified against it.
+- **`zod` → `^4`.** Zod 3.x is affected by GHSA-mrhx-c7xc-m3w5 (memory
+  exhaustion on oversized constrained collections). Zod 4 is a breaking change:
+  `z.record()` now requires an explicit key schema
+  (`z.record(z.string(), valueSchema)`). Do not downgrade without re-checking.
+
 ## Troubleshooting
 
 | Symptom | Fix |

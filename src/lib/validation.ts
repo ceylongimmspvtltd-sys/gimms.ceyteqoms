@@ -106,7 +106,7 @@ export const restaurantSubmissionSchema = z.object({
   owner_whatsapp: optionalText(32),
   /** e.g. { instagram: "handle", facebook: "page-url" } — strings only. */
   social_links: z
-    .record(z.string().trim().max(300))
+    .record(z.string(), z.string().trim().max(300))
     .optional()
     .default({}),
   /** Brand palette — hex only, max 12 (matches the DB constraint). */
