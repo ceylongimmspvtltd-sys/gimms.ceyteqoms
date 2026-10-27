@@ -205,20 +205,25 @@ psql "$DATABASE_URL" -f supabase/migrations/0001_init.sql \
 cp .env.example .env.local     # fill in the values
 npm run check:env              # ✓ all present and well-formed
 
-# mirror them into Vercel for production + preview + development:
-vercel link                    # connect this folder to the Vercel project
+# link this folder to the Vercel project (creates it if you have none):
+vercel link
+
+# mirror .env.local into Vercel for production + preview + development.
+# `source` loads the values; --value makes it non-interactive, --force
+# overwrites any existing value. Verified against Vercel CLI 65.
+set -a; . ./.env.local; set +a
 for v in NEXT_PUBLIC_SUPABASE_URL NEXT_PUBLIC_SUPABASE_ANON_KEY \
          SUPABASE_SERVICE_ROLE_KEY ADMIN_EMAIL ADMIN_PASSWORD \
-         ADMIN_FULL_NAME AUDIT_IP_HASH_SECRET; do
-  vercel env add "$v" production
+         ADMIN_FULL_NAME AUDIT_IP_HASH_SECRET NEXT_PUBLIC_SITE_URL; do
+  vercel env add "$v" --value "${!v}" --environment production \
+                          --environment preview --environment development --force
 done
-vercel env add NEXT_PUBLIC_SITE_URL production   # = https://<your-domain>
-vercel env ls                                    # verify
+vercel env ls --environment production     # verify
 ```
 
 > `SUPABASE_SERVICE_ROLE_KEY` and `ADMIN_PASSWORD` must **never** be prefixed
 > with `NEXT_PUBLIC_` — that would ship them to the browser.
-> Pull them back down any time with `vercel env pull .env.local`.
+> Pull them back down any time with `vercel env pull .env.local -e production`.
 
 **3 · Push the code:**
 
@@ -231,7 +236,7 @@ git push origin main
 **4 · Deploy:**
 
 ```bash
-vercel --prod        # prints the production URL
+vercel deploy --prod --yes      # prints the production URL
 ```
 
 If the Vercel project is already linked to the GitHub repo, step 3's push to
