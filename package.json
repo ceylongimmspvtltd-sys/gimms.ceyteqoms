@@ -2,7 +2,7 @@
   "name": "ceyteq-general-management-system",
   "version": "0.1.0",
   "private": true,
-  "description": "Ceyteq General Management System — Empowering Digital Evolution (Phase 1: login, email OTP, dashboard shell)",
+  "description": "Ceyteq General Management System \u2014 Empowering Digital Evolution (Phase 1: login, email OTP, dashboard shell)",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
@@ -10,7 +10,8 @@
     "typecheck": "tsc --noEmit",
     "lint": "eslint src scripts",
     "check:db": "tsx scripts/check-connection.ts",
-    "seed": "tsx scripts/seed.ts"
+    "seed": "tsx scripts/seed.ts",
+    "check:env": "tsx scripts/check-env.ts"
   },
   "dependencies": {
     "@fontsource-variable/manrope": "^5.2.5",
