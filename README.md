@@ -34,12 +34,25 @@ only the env vars differ per environment.
    project **`general system`** (create it first if it doesn't exist yet —
    pick a strong database password and the region closest to you, e.g.
    Singapore `ap-southeast-1`).
-2. **Apply the schema:** go to **SQL Editor → New query**, paste the whole
-   contents of [`supabase/migrations/0001_init.sql`](supabase/migrations/0001_init.sql)
-   and run it. It creates `departments`, `profiles`, `audit_logs`, enables
-   Row Level Security with hierarchy policies, and installs the
-   “new user → profile” trigger. Safe to re-run.
-   *(Alternative with the CLI: `supabase link --project-ref <ref>` then `supabase db push`.)*
+2. **Apply the schema — both migrations, in order.** Go to **SQL Editor →
+   New query**, paste the whole contents of each file and run it:
+
+   | Migration | Creates |
+   | --- | --- |
+   | [`0001_init.sql`](supabase/migrations/0001_init.sql) | `departments`, `profiles`, `audit_logs`, RLS hierarchy policies, “new user → profile” trigger |
+   | [`0002_restaurant_submissions.sql`](supabase/migrations/0002_restaurant_submissions.sql) | `restaurant_submissions` (Digital Race intake), triage enum, staff-only RLS |
+
+   Both are idempotent — safe to re-run.
+
+   *(CLI alternative: `supabase link --project-ref <ref>` then
+   `supabase db push`. One-liner with psql:
+   `psql "$DATABASE_URL" -f supabase/migrations/0001_init.sql -f supabase/migrations/0002_restaurant_submissions.sql`.)*
+
+   > **`restaurant_submissions` access model:** `anon` may **INSERT only**
+   > (so the public form works without a session) and the row must arrive
+   > `status = 'new'`, unassigned and unreviewed. All `SELECT`/`UPDATE` is
+   > staff-only via RLS; `DELETE` is super-admin-only. Submitters can never
+   > read back or enumerate other rows.
 3. **Authentication settings** — **Authentication → URL Configuration**:
    - Site URL: `http://localhost:3000` (change to your Vercel domain later)
    - Redirect URLs: add `http://localhost:3000/**` and your production
@@ -157,7 +170,9 @@ src/
     audit.ts · data.ts · permissions.ts · validation.ts (Zod) · format.ts
   middleware.ts         session refresh, OTP gate, 30-min idle timeout
 supabase/migrations/    0001_init.sql (tables, RLS, trigger, helpers)
-scripts/                check-connection.ts · seed.ts
+                        0002_restaurant_submissions.sql (Digital Race intake)
+scripts/                check-connection.ts · check-env.ts · seed.ts
+.github/workflows/      ci.yml (typecheck · lint · build)
 public/brand/           ceyteq-logo.png · ceyteq-logo-sm.png · ceyteq-icon.png
 assets/                 ceyteq-logo-source.jpg (original artwork)
 ```
@@ -169,27 +184,72 @@ Fontsource. Radii 24–32 px, 250 ms motion, `prefers-reduced-motion` honoured.
 
 ## Deploy to Vercel
 
-1. Push this repo to GitHub (below).
-2. Vercel → **Add New → Project** → import the repo (framework auto-detected:
-   Next.js; `vercel.json` is included).
-3. Add the same env vars in **Settings → Environment Variables**, with
-   `NEXT_PUBLIC_SITE_URL` set to the production domain.
-4. In Supabase **Authentication → URL Configuration**, set the Site URL to
-   the production domain and add `https://<domain>/**` to Redirect URLs.
-5. Deploy, then sanity-check `https://<domain>/api/health` → `status: ok`.
+Prerequisites: `npm i -g vercel supabase` once, then `vercel login` /
+`supabase login`. All commands run from the repo root.
 
-## GitHub
+**1 · Create the table in Supabase** (the only step that touches the DB):
 
 ```bash
-git add .
-git commit -m "Phase 1: login + email OTP + dashboard shell"
-git push
+# either paste both files in Dashboard → SQL Editor, or:
+supabase link --project-ref <your-project-ref>
+supabase db push          # applies supabase/migrations/*.sql in order
+
+# no CLI? psql works with the pooled connection string:
+psql "$DATABASE_URL" -f supabase/migrations/0001_init.sql \
+                     -f supabase/migrations/0002_restaurant_submissions.sql
 ```
 
-CI (`.github/workflows/ci.yml`) runs **typecheck + lint + build** on every
-push. No secrets are required for CI — the app builds without live
-credentials (optionally add `NEXT_PUBLIC_SUPABASE_URL` /
-`NEXT_PUBLIC_SUPABASE_ANON_KEY` as repository secrets for a warm build).
+**2 · Environment variables** — local `.env.local`, then Vercel:
+
+```bash
+cp .env.example .env.local     # fill in the values
+npm run check:env              # ✓ all present and well-formed
+
+# link this folder to the Vercel project (creates it if you have none):
+vercel link
+
+# mirror .env.local into Vercel for production + preview + development.
+# `source` loads the values; --value makes it non-interactive, --force
+# overwrites any existing value. Verified against Vercel CLI 65.
+set -a; . ./.env.local; set +a
+for v in NEXT_PUBLIC_SUPABASE_URL NEXT_PUBLIC_SUPABASE_ANON_KEY \
+         SUPABASE_SERVICE_ROLE_KEY ADMIN_EMAIL ADMIN_PASSWORD \
+         ADMIN_FULL_NAME AUDIT_IP_HASH_SECRET NEXT_PUBLIC_SITE_URL; do
+  vercel env add "$v" --value "${!v}" --environment production \
+                          --environment preview --environment development --force
+done
+vercel env ls --environment production     # verify
+```
+
+> `SUPABASE_SERVICE_ROLE_KEY` and `ADMIN_PASSWORD` must **never** be prefixed
+> with `NEXT_PUBLIC_` — that would ship them to the browser.
+> Pull them back down any time with `vercel env pull .env.local -e production`.
+
+**3 · Push the code:**
+
+```bash
+git add -A
+git commit -m "Restore src/ tree, add restaurant_submissions migration, env checks"
+git push origin main
+```
+
+**4 · Deploy:**
+
+```bash
+vercel deploy --prod --yes      # prints the production URL
+```
+
+If the Vercel project is already linked to the GitHub repo, step 3's push to
+`main` triggers the production build automatically — skip step 4.
+
+**5 · Post-deploy checks** (order matters):
+
+1. `https://<domain>/api/health` → `{"status":"ok","supabase":"connected"}`
+2. `npm run seed` (once, locally, with production `ADMIN_*` values) to create
+   the Super Master Admin.
+3. Supabase → **Authentication → URL Configuration**: Site URL = production
+   domain, Redirect URLs `https://<domain>/**`.
+4. Sign in at `/login` and confirm the 6-digit OTP arrives.
 
 ## Troubleshooting
 
