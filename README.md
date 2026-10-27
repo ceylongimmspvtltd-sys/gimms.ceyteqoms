@@ -40,7 +40,7 @@ only the env vars differ per environment.
    | Migration | Creates |
    | --- | --- |
    | [`0001_init.sql`](supabase/migrations/0001_init.sql) | `departments`, `profiles`, `audit_logs`, RLS hierarchy policies, “new user → profile” trigger |
-   | [`0002_restaurant_submissions.sql`](supabase/migrations/0002_restaurant_submissions.sql) | `restaurant_submissions` (Digital Race intake), triage enum, staff-only RLS |
+   | [`0002_restaurant_submissions.sql`](supabase/migrations/0002_restaurant_submissions.sql) | `restaurant_submissions` — Digital Race public form (columns match the form 1:1), duplicate guard, staff-only reads |
 
    Both are idempotent — safe to re-run.
 
@@ -49,10 +49,11 @@ only the env vars differ per environment.
    `psql "$DATABASE_URL" -f supabase/migrations/0001_init.sql -f supabase/migrations/0002_restaurant_submissions.sql`.)*
 
    > **`restaurant_submissions` access model:** `anon` may **INSERT only**
-   > (so the public form works without a session) and the row must arrive
-   > `status = 'new'`, unassigned and unreviewed. All `SELECT`/`UPDATE` is
-   > staff-only via RLS; `DELETE` is super-admin-only. Submitters can never
-   > read back or enumerate other rows.
+   > (so the public form works without a session). `SELECT` is signed-in staff;
+   > `UPDATE`/`DELETE` are super-admin only. Submitters can never read back or
+   > enumerate other rows. Validation lives in
+   > `restaurantSubmissionSchema` (`src/lib/validation.ts`) and mirrors the
+   > table's CHECK constraints.
 3. **Authentication settings** — **Authentication → URL Configuration**:
    - Site URL: `http://localhost:3000` (change to your Vercel domain later)
    - Redirect URLs: add `http://localhost:3000/**` and your production
@@ -129,6 +130,25 @@ Every `login`, `login_failed`, `otp_sent`, `otp_verified`, `otp_failed`,
 IP** and user agent. Hardening throughout: server-side Zod validation,
 origin (CSRF) checks, per-IP/per-account rate limits, CSP + HSTS + nosniff
 headers, and the service-role key confined to server code (`server-only`).
+
+## Digital Race — public restaurant form
+
+`/digital-race` is the only **public** page in the app (middleware gates only
+`/dashboard/*`). It posts to a server action that layers, outermost first:
+
+1. malformed-body guard (a crafted request returns an error state, never a 500)
+2. `assertSameOrigin()` CSRF check — Next.js also blocks cross-origin
+   forwarded Server Actions independently
+3. rate limit: 5 submissions per IP per 10 minutes
+4. honeypot field (`company-website`) → silent drop, nothing written
+5. Zod validation (`restaurantSubmissionSchema`) mirroring the DB CHECKs
+6. insert through the **anon** client, so the table's RLS policy is the final
+   authority. The service-role key is never used on this path.
+
+Field mapping lives in `src/app/digital-race/submission.ts`
+(`parseSubmission`), deliberately free of `next/headers` and Supabase imports so
+it can be unit-tested with a real `FormData`. Each `social_*` input collapses
+into the `social_links` jsonb and each `theme_color_N` into `theme_colors[]`.
 
 ## Roles & permissions
 
@@ -250,6 +270,19 @@ If the Vercel project is already linked to the GitHub repo, step 3's push to
 3. Supabase → **Authentication → URL Configuration**: Site URL = production
    domain, Redirect URLs `https://<domain>/**`.
 4. Sign in at `/login` and confirm the 6-digit OTP arrives.
+
+## Dependency security
+
+`npm audit` is clean. Two pins are deliberate and must be kept:
+
+- **`overrides.postcss` → `^8.5.32`.** `next@15` pins `postcss@8.4.31`, which is
+  affected by CVE advisories GHSA-qx2v-qp2m-jg93 / -6g55-p6wh-862q /
+  -r28c-9q8g-f849 (arbitrary file read via `sourceMappingURL`). Build-time
+  only, but overridden anyway; `next build` is verified against it.
+- **`zod` → `^4`.** Zod 3.x is affected by GHSA-mrhx-c7xc-m3w5 (memory
+  exhaustion on oversized constrained collections). Zod 4 is a breaking change:
+  `z.record()` now requires an explicit key schema
+  (`z.record(z.string(), valueSchema)`). Do not downgrade without re-checking.
 
 ## Troubleshooting
 

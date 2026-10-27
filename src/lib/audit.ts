@@ -7,7 +7,8 @@ import { getClientIp, getUserAgent, hashIp } from "@/lib/api-helpers";
  * Audit logging. Every security-relevant event is recorded with a hashed
  * IP (never the raw address) and the user agent:
  *   login | login_failed | otp_sent | otp_verified | otp_failed |
- *   logout | password_reset_requested | password_reset | password_changed
+ *   logout | password_reset_requested | password_reset | password_changed |
+ *   submission_created | submission_failed
  *
  * Uses the service-role client so events can be recorded even when there
  * is no session yet (e.g. a failed login). Failures are swallowed — an
@@ -22,7 +23,9 @@ export type AuditAction =
   | "logout"
   | "password_reset_requested"
   | "password_reset"
-  | "password_changed";
+  | "password_changed"
+  | "submission_created"
+  | "submission_failed";
 
 export async function logAudit(
   action: AuditAction,

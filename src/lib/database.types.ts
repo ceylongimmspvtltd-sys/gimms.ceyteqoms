@@ -39,59 +39,46 @@ export interface AuditLog {
   created_at: string;
 }
 
-/** Row shapes for 0002_restaurant_submissions.sql ("Digital Race" intake). */
-
-export type SubmissionStatus =
-  | "new"
-  | "in_review"
-  | "contacted"
-  | "approved"
-  | "rejected"
-  | "archived";
-
+/**
+ * Row shape for 0002_restaurant_submissions.sql ("Digital Race" intake).
+ * Columns match the Next.js form field-for-field.
+ */
 export interface RestaurantSubmission {
   id: string;
-  reference: string;
   restaurant_name: string;
-  cuisine: string | null;
-  city: string | null;
-  country: string;
-  website: string | null;
-  seating_capacity: number | null;
-  contact_name: string;
-  email: string;
-  phone: string | null;
-  message: string | null;
-  payload: Record<string, unknown>;
-  source: string;
-  status: SubmissionStatus;
-  assigned_to: string | null;
-  department_id: string | null;
-  reviewed_by: string | null;
-  reviewed_at: string | null;
-  internal_notes: string | null;
-  ip_hash: string | null;
-  user_agent: string | null;
+  location: string | null;
+  address: string | null;
+  near_by_city: string | null;
+  phone_number: string | null;
+  whatsapp_number: string | null;
+  restaurant_email: string | null;
+  owner_name: string | null;
+  owner_email: string | null;
+  owner_phone: string | null;
+  owner_whatsapp: string | null;
+  social_links: Record<string, string>;
+  theme_colors: string[];
+  special_note: string | null;
   created_at: string;
-  updated_at: string;
 }
 
-/** What the public form may send — matches the anon INSERT RLS policy. */
-export type RestaurantSubmissionInput = Pick<
-  RestaurantSubmission,
-  "restaurant_name" | "contact_name" | "email"
-> &
-  Partial<
-    Pick<
-      RestaurantSubmission,
-      | "cuisine"
-      | "city"
-      | "country"
-      | "website"
-      | "seating_capacity"
-      | "phone"
-      | "message"
-      | "payload"
-      | "source"
-    >
-  >;
+/**
+ * What the public form may send. `id` and `created_at` are server-generated,
+ * and every column with a DB default/tolerance is optional.
+ */
+export interface RestaurantSubmissionInput {
+  restaurant_name: string;
+  location?: string | null;
+  address?: string | null;
+  near_by_city?: string | null;
+  phone_number?: string | null;
+  whatsapp_number?: string | null;
+  restaurant_email?: string | null;
+  owner_name?: string | null;
+  owner_email?: string | null;
+  owner_phone?: string | null;
+  owner_whatsapp?: string | null;
+  social_links?: Record<string, string>;
+  theme_colors?: string[];
+  special_note?: string | null;
+}
