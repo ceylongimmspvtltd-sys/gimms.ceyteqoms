@@ -131,6 +131,25 @@ IP** and user agent. Hardening throughout: server-side Zod validation,
 origin (CSRF) checks, per-IP/per-account rate limits, CSP + HSTS + nosniff
 headers, and the service-role key confined to server code (`server-only`).
 
+## Digital Race — public restaurant form
+
+`/digital-race` is the only **public** page in the app (middleware gates only
+`/dashboard/*`). It posts to a server action that layers, outermost first:
+
+1. malformed-body guard (a crafted request returns an error state, never a 500)
+2. `assertSameOrigin()` CSRF check — Next.js also blocks cross-origin
+   forwarded Server Actions independently
+3. rate limit: 5 submissions per IP per 10 minutes
+4. honeypot field (`company-website`) → silent drop, nothing written
+5. Zod validation (`restaurantSubmissionSchema`) mirroring the DB CHECKs
+6. insert through the **anon** client, so the table's RLS policy is the final
+   authority. The service-role key is never used on this path.
+
+Field mapping lives in `src/app/digital-race/submission.ts`
+(`parseSubmission`), deliberately free of `next/headers` and Supabase imports so
+it can be unit-tested with a real `FormData`. Each `social_*` input collapses
+into the `social_links` jsonb and each `theme_color_N` into `theme_colors[]`.
+
 ## Roles & permissions
 
 ```
